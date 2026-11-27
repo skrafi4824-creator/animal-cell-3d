@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Study3D — Animal Cell</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#08101d;color:#eef5ff;font-family:Arial,sans-serif}
+header{padding:20px;background:linear-gradient(135deg,#102a52,#12475a)}
+h1{margin:0;font-size:28px}
+header p{margin:7px 0 0;color:#c2d2e8}
+main{max-width:1200px;margin:auto;padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.card{background:#0d1b2e;border:1px solid #29476b;border-radius:18px;padding:16px}
+h2{margin:0 0 12px}.label{color:#a9c5e5;font-size:13px}
+#diagram,#viewer{width:100%;height:500px;background:#03070e;border-radius:12px;display:block}
+button{border:1px solid #42638b;background:#17375c;color:#fff;border-radius:9px;padding:9px 13px;margin-top:10px;cursor:pointer}
+button:hover{background:#25517f}
+.info{line-height:1.5;color:#d5dfed}.part{padding:9px 0;border-bottom:1px solid #28425f}.part b{color:#9fd1ff}
+.hint{font-size:12px;color:#9fb3cc;margin-top:8px}
+@media(max-width:800px){main{grid-template-columns:1fr}#diagram,#viewer{height:390px}}
+</style>
+</head>
+<body>
+<header><h1>🔬 Study3D</h1><p>Your animal-cell picture + interactive 3D study model</p></header>
+<main>
+<section class="card">
+<h2>📷 Animal Cell Diagram</h2>
+<div class="label">Built into this file — no missing image file</div>
+<canvas id="diagram"></canvas>
+</section>
+
+<section class="card">
+<h2>🧊 3D Animal Cell</h2>
+<canvas id="viewer"></canvas>
+<button onclick="resetView()">Reset view</button>
+<button onclick="spin=!spin">Auto rotate</button>
+<p class="info">Drag to rotate and use your fingers/wheel to zoom. The model is a simplified educational reconstruction.</p>
+<p class="hint">If the model is not moving, tap and drag inside the black box.</p>
+<div id="info"></div>
+</section>
+</main>
+
+<script>
+/* ---------- 2D animal-cell study diagram ---------- */
+const d=document.getElementById("diagram"), dc=d.getContext("2d");
+function fit(c,ctx){const r=c.getBoundingClientRect(),s=Math.min(devicePixelRatio||1,2);c.width=r.width*s;c.height=r.height*s;ctx.setTransform(s,0,0,s,0,0);return [r.width,r.height]}
+function drawDiagram(){
+ const [w,h]=fit(d,dc), cx=w/2, cy=h/2, rx=Math.min(w*.40,220), ry=Math.min(h*.37,185);
+ dc.clearRect(0,0,w,h); dc.fillStyle="#050b14"; dc.fillRect(0,0,w,h);
+ dc.beginPath();dc.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);dc.fillStyle="#31547b";dc.fill();dc.strokeStyle="#70dfff";dc.lineWidth=4;dc.stroke();
+ dc.beginPath();dc.ellipse(cx,cy,rx-13,ry-13,0,0,Math.PI*2);dc.fillStyle="#18314d";dc.fill();
+ // nucleus
+ dc.beginPath();dc.ellipse(cx-20,cy,70,58,0,0,Math.PI*2);dc.fillStyle="#755fc0";dc.fill();dc.strokeStyle="#b49cff";dc.stroke();
+ dc.beginPath();dc.arc(cx-5,cy-2,17,0,Math.PI*2);dc.fillStyle="#f1c66b";dc.fill();
+ // mitochondria
+ const mit=[[-120,-75],[120,-45],[115,65],[-125,60]];
+ for(const [x,y] of mit){dc.save();dc.translate(cx+x,cy+y);dc.rotate(-.25);dc.beginPath();dc.ellipse(0,0,34,16,0,0,Math.PI*2);dc.fillStyle="#d77b43";dc.fill();dc.strokeStyle="#ffb070";dc.stroke();dc.beginPath();dc.moveTo(-20,-3);dc.bezierCurveTo(-8,12,0,-12,10,4);dc.bezierCurveTo(17,15,22,-8,28,1);dc.strokeStyle="#6d321e";dc.stroke();dc.restore();}
+ // golgi
+ for(let i=-2;i<=2;i++){dc.beginPath();dc.ellipse(cx+145,cy-15+i*13,38,7,0,0,Math.PI*2);dc.fillStyle="#e66ea6";dc.fill();}
+ // ER
+ dc.strokeStyle="#55c994";dc.lineWidth=3;
+ for(let i=0;i<4;i++){dc.beginPath();dc.arc(cx-5,cy+8+i*10,105,0.2,2.5);dc.stroke();}
+ // ribosomes
+ for(let i=0;i<30;i++){const a=i*2.4,r=130+(i%4)*10;const x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r*.72;dc.beginPath();dc.arc(x,y,3,0,Math.PI*2);dc.fillStyle="#f0d77d";dc.fill();}
+ // labels
+ dc.font="bold 13px Arial";dc.fillStyle="#eef5ff";
+ dc.fillText("Plasma membrane",18,24); dc.fillText("Nucleus",cx-48,cy-70);
+ dc.fillText("Mitochondria",18,h-20); dc.fillText("Golgi",w-75,cy-55);
+}
+drawDiagram();addEventListener("resize",drawDiagram);
+
+/* ---------- Dependency-free interactive 3D model ---------- */
+const c=document.getElementById("viewer"), ctx=c.getContext("2d");
+let yaw=0.55,pitch=-0.12,zoom=1,spin=true,drag=false,lastX=0,lastY=0;
+const parts=[
+ {name:"Nucleus",x:-.35,y:.1,z:.2,rx:1.55,ry:1.35,rz:1.3,col:"#8f6fe8"},
+ {name:"Nucleolus",x:-.1,y:.25,z:1.2,rx:.42,ry:.42,rz:.42,col:"#f2c36c"},
+ {name:"Mitochondria",x:-2,y:1.5,z:.5,rx:.72,ry:.35,rz:.28,col:"#e98a4c"},
+ {name:"Mitochondria",x:2,y:-1.3,z:.8,rx:.72,ry:.35,rz:.28,col:"#e98a4c"},
+ {name:"Mitochondria",x:1.9,y:1.35,z:-.9,rx:.72,ry:.35,rz:.28,col:"#e98a4c"},
+ {name:"Mitochondria",x:-2.2,y:-1.2,z:-.8,rx:.72,ry:.35,rz:.28,col:"#e98a4c"},
+ {name:"Golgi",x:2,y:.25,z:.15,rx:.85,ry:.16,rz:.5,col:"#ff78b7"},
+ {name:"Centriole",x:1,y:-.8,z:-.25,rx:.13,ry:.13,rz:.4,col:"#72aaff"},
+ {name:"Centriole",x:1,y:-.8,z:.25,rx:.13,ry:.13,rz:.4,col:"#72aaff"}
+];
+function fitViewer(){const r=c.getBoundingClientRect(),s=Math.min(devicePixelRatio||1,2);c.width=r.width*s;c.height=r.height*s;ctx.setTransform(s,0,0,s,0,0)}
+fitViewer();addEventListener("resize",fitViewer);
+function rot(p){let x=p.x,y=p.y,z=p.z,cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+ let x1=x*cy-z*sy,z1=x*sy+z*cy;let y1=y*cp-z1*sp,z2=y*sp+z1*cp;return{x:x1,y:y1,z:z2}}
+function project(p){const q=rot(p),f=8/(8+q.z);return{x:c.clientWidth/2+q.x*55*zoom*f,y:c.clientHeight/2+q.y*55*zoom*f,z:q.z}}
+function ellipse(x,y,rx,ry,rotA,fill,stroke){
+ ctx.save();ctx.translate(x,y);ctx.rotate(rotA);ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke()}ctx.restore()
+}
+function render3D(){
+ const w=c.clientWidth,h=c.clientHeight;ctx.clearRect(0,0,w,h);ctx.fillStyle="#03070e";ctx.fillRect(0,0,w,h);
+ const center=project({x:0,y:0,z:0}), scale=55*zoom;
+ // membrane/cytoplasm
+ ellipse(center.x,center.y,5*scale/1.15,4.1*scale/1.15,0,"rgba(70,150,220,.10)","#59d8ff");
+ ellipse(center.x,center.y,4.7*scale/1.15,3.8*scale/1.15,0,"rgba(130,170,220,.12)",null);
+ // organelles sorted by depth
+ const arr=parts.map((p,i)=>({...p,i,pr:project(p)})).sort((a,b)=>a.pr.z-b.pr.z);
+ for(const p of arr){
+   const sx=p.rx*scale*(8/(8+p.pr.z)), sy=p.ry*scale*(8/(8+p.pr.z));
+   const ang=Math.atan2(Math.sin(yaw+p.i),Math.cos(yaw+p.i))*0.18;
+   ellipse(p.pr.x,p.pr.y,sx,sy,ang,p.col,p.col);
+   if(p.name==="Mitochondria"){
+     ctx.strokeStyle="#63341f";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.pr.x-sx*.55,p.pr.y);ctx.quadraticCurveTo(p.pr.x-sx*.15,p.pr.y-sy*.7,p.pr.x+.1*sx,p.pr.y);ctx.quadraticCurveTo(p.pr.x+.45*sx,p.pr.y+sy*.65,p.pr.x+.65*sx,p.pr.y-sy*.1);ctx.stroke();
+   }
+ }
+ // ER rings
+ for(let i=0;i<4;i++){const q=project({x:-.2,y:.1,z:-.2+i*.12});ellipse(q.x,q.y,(1.85+i*.1)*scale*.55,.065*scale*2,.1,"rgba(95,211,165,.55)","#5fd3a5");}
+ // ribosomes
+ for(let i=0;i<36;i++){const a=i*2.399,r=2+(i%5)*.25,q=project({x:Math.cos(a)*r,y:(i%7-3)*.28,z:Math.sin(a)*r*.7});ctx.beginPath();ctx.arc(q.x,q.y,Math.max(1.8,3*zoom),0,Math.PI*2);ctx.fillStyle="#f1df8b";ctx.fill();}
+ ctx.fillStyle="#9fb3cc";ctx.font="12px Arial";ctx.fillText("Drag to rotate • pinch/scroll to zoom",12,h-12);
+}
+function animate(){if(spin)yaw+=.003;render3D();requestAnimationFrame(animate)}animate();
+c.addEventListener("pointerdown",e=>{drag=true;lastX=e.clientX;lastY=e.clientY;c.setPointerCapture(e.pointerId)});
+c.addEventListener("pointerup",()=>drag=false);
+c.addEventListener("pointermove",e=>{if(!drag)return;yaw+=(e.clientX-lastX)*.01;pitch+=(e.clientY-lastY)*.01;pitch=Math.max(-1.2,Math.min(1.2,pitch));lastX=e.clientX;lastY=e.clientY});
+c.addEventListener("wheel",e=>{e.preventDefault();zoom*=e.deltaY<0?1.08:.93;zoom=Math.max(.55,Math.min(1.8,zoom))},{passive:false});
+c.addEventListener("touchstart",e=>{if(e.touches.length===1){drag=true;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY}});
+c.addEventListener("touchmove",e=>{if(!drag||e.touches.length!==1)return;e.preventDefault();yaw+=(e.touches[0].clientX-lastX)*.01;pitch+=(e.touches[0].clientY-lastY)*.01;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY},{passive:false});
+c.addEventListener("touchend",()=>drag=false);
+function resetView(){yaw=.55;pitch=-.12;zoom=1}
+document.getElementById("info").innerHTML=[
+["Plasma membrane","Outer boundary of the cell."],
+["Nucleus","Contains the cell's genetic material."],
+["Mitochondria","Help release usable energy."],
+["Golgi apparatus","Modifies, sorts and packages materials."],
+["Endoplasmic reticulum","Membrane network inside the cell."],
+["Ribosomes","Structures involved in making proteins."],
+["Centriole","Small cellular structure shown near the nucleus."],
+["Cytoplasm","Material filling the inside around organelles."]
+].map(x=>`<div class="part"><b>${x[0]}</b><br>${x[1]}</div>`).join("");
+</script>
+</body>
+</html>
